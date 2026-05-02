@@ -87,149 +87,183 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   /// 🔥 PDF (UNCHANGED)
   Future<void> generateShiftPdf() async {
-    final pdf = pw.Document();
-    final filtered = getFilteredEmployees();
+  final pdf = pw.Document();
+  final filtered = getFilteredEmployees();
 
-    final now = DateTime.now();
-    final year = now.year;
-    final month = now.month;
-    final daysInMonth = DateUtils.getDaysInMonth(year, month);
-
-    final data = await supabase
-        .from('attendance')
-        .select()
-        .gte('date', DateTime(year, month, 1).toIso8601String())
-        .lte(
-          'date',
-          DateTime(year, month, daysInMonth, 23, 59, 59)
-              .toIso8601String(),
-        );
-
-    Map<String, Map<int, String>> monthlyMap = {};
-    for (var row in data) {
-      final empId = row['employee_id'].toString();
-      final date = DateTime.parse(row['date']);
-      final day = date.day;
-
-      monthlyMap.putIfAbsent(empId, () => {});
-      monthlyMap[empId]![day] = row['status'];
+  /// 🔥 SORT ASCENDING
+  filtered.sort((a, b) {
+    int getNumber(String id) {
+      return int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     }
 
-    pw.Widget cell(String text) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.all(3),
-        alignment: pw.Alignment.center,
-        child: pw.Text(text, style: pw.TextStyle(fontSize: 7)),
+    return getNumber(a.employee_id ?? "")
+        .compareTo(getNumber(b.employee_id ?? ""));
+  });
+
+  final now = DateTime.now();
+  final year = now.year;
+  final month = now.month;
+  final daysInMonth = DateUtils.getDaysInMonth(year, month);
+
+  final data = await supabase
+      .from('attendance')
+      .select()
+      .gte('date', DateTime(year, month, 1).toIso8601String())
+      .lte(
+        'date',
+        DateTime(year, month, daysInMonth, 23, 59, 59)
+            .toIso8601String(),
       );
-    }
 
-    pdf.addPage(
-      pw.MultiPage(
-        orientation: pw.PageOrientation.landscape,
-        margin: const pw.EdgeInsets.all(6),
-        build: (context) => [
-          pw.SizedBox(height: 20),
-          pw.Center(
-            child: pw.Text(
-              "SHIFT $selectedShift - ATTENDANCE ($month/$year)",
-              style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Table(
-            border: pw.TableBorder.all(width: 0.3),
-            children: [
-              pw.TableRow(
-                children: [
-                  cell("NAME"),
-                  ...List.generate(daysInMonth, (i) {
-                    final d = DateTime(year, month, i + 1);
-                    return pw.Container(
-                      color: d.weekday == 7
-                          ? PdfColors.red200
-                          : PdfColors.grey300,
-                      child: cell(getDayName(d.weekday)),
-                    );
-                  }),
-                  cell("P"),
-                  cell("L"),
-                  cell("AB"),
-                  cell("OFF"),
-                  cell("NH"),
-                ],
-              ),
-              pw.TableRow(
-                children: [
-                  cell(""),
-                  ...List.generate(daysInMonth, (i) {
-                    final d = DateTime(year, month, i + 1);
-                    return pw.Container(
-                      color: d.weekday == 7
-                          ? PdfColors.red100
-                          : PdfColors.white,
-                      child: cell("${i + 1}"),
-                    );
-                  }),
-                  cell(""),
-                  cell(""),
-                  cell(""),
-                  cell(""),
-                  cell(""),
-                ],
-              ),
-              ...filtered.map((emp) {
-                int p = 0, l = 0, ab = 0, off = 0, nh = 0;
+  /// 🔥 MAP
+  Map<String, Map<int, String>> monthlyMap = {};
+  for (var row in data) {
+    final empId = row['employee_id'].toString();
+    final date = DateTime.parse(row['date']);
+    final day = date.day;
 
-                List<pw.Widget> dayCells = [];
+    monthlyMap.putIfAbsent(empId, () => {});
+    monthlyMap[empId]![day] = row['status'];
+  }
 
-                for (int d = 1; d <= daysInMonth; d++) {
-                  String status =
-                      monthlyMap[emp.id.toString()]?[d] ?? "-";
-
-                  if (status == "P") p++;
-                  if (status == "L") l++;
-                  if (status == "AB") ab++;
-                  if (status == "OFF") off++;
-                  if (status == "NH") nh++;
-
-                  dayCells.add(
-                    pw.Container(
-                      alignment: pw.Alignment.center,
-                      color: getPdfColor(status),
-                      child: pw.Text(status,
-                          style:
-                              const pw.TextStyle(fontSize: 6)),
-                    ),
-                  );
-                }
-
-                return pw.TableRow(
-                  children: [
-                    cell(emp.name),
-                    ...dayCells,
-                    cell("$p"),
-                    cell("$l"),
-                    cell("$ab"),
-                    cell("$off"),
-                    cell("$nh"),
-                  ],
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    final bytes = await pdf.save();
-
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename:
-          "Attendance_Shift-${selectedShift}_${month.toString().padLeft(2, '0')}_$year.pdf",
+  pw.Widget cell(String text) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(3),
+      alignment: pw.Alignment.center,
+      child: pw.Text(text, style: pw.TextStyle(fontSize: 7)),
     );
   }
+
+  pdf.addPage(
+    pw.MultiPage(
+      orientation: pw.PageOrientation.landscape,
+      margin: const pw.EdgeInsets.all(6),
+      build: (context) => [
+        pw.SizedBox(height: 20),
+
+        /// 🔥 TITLE
+        pw.Center(
+          child: pw.Text(
+            "SHIFT $selectedShift - ATTENDANCE ($month/$year)",
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ),
+
+        pw.SizedBox(height: 6),
+
+        pw.Table(
+          border: pw.TableBorder.all(width: 0.3),
+          children: [
+            /// 🔥 HEADER ROW
+            pw.TableRow(
+              children: [
+                cell("NO"),   // 🔥 NEW COLUMN
+                cell("NAME"),
+                ...List.generate(daysInMonth, (i) {
+                  final d = DateTime(year, month, i + 1);
+                  return pw.Container(
+                    color: d.weekday == 7
+                        ? PdfColors.red200
+                        : PdfColors.grey300,
+                    child: cell(getDayName(d.weekday)),
+                  );
+                }),
+                cell("P"),
+                cell("L"),
+                cell("AB"),
+                cell("OFF"),
+                cell("NH"),
+              ],
+            ),
+
+            /// 🔥 DATE ROW
+            pw.TableRow(
+              children: [
+                cell(""),
+                cell(""),
+                ...List.generate(daysInMonth, (i) {
+                  final d = DateTime(year, month, i + 1);
+                  return pw.Container(
+                    color: d.weekday == 7
+                        ? PdfColors.red100
+                        : PdfColors.white,
+                    child: cell("${i + 1}"),
+                  );
+                }),
+                cell(""),
+                cell(""),
+                cell(""),
+                cell(""),
+                cell(""),
+              ],
+            ),
+
+            /// 🔥 DATA ROWS
+            ...filtered.asMap().entries.map((entry) {
+              final index = entry.key;
+              final emp = entry.value;
+
+              int p = 0, l = 0, ab = 0, off = 0, nh = 0;
+
+              List<pw.Widget> dayCells = [];
+
+              for (int d = 1; d <= daysInMonth; d++) {
+                String status =
+                    monthlyMap[emp.id.toString()]?[d] ?? "-";
+
+                if (status == "P") p++;
+                if (status == "L") l++;
+                if (status == "AB") ab++;
+                if (status == "OFF") off++;
+                if (status == "NH") nh++;
+
+                dayCells.add(
+                  pw.Container(
+                    alignment: pw.Alignment.center,
+                    color: getPdfColor(status),
+                    child: pw.Text(
+                      status,
+                      style: const pw.TextStyle(fontSize: 6),
+                    ),
+                  ),
+                );
+              }
+
+              return pw.TableRow(
+                children: [
+                  /// 🔥 SERIAL NUMBER
+                  cell("${index + 1}"),
+
+                  /// 🔥 NAME + ID
+                  cell("${emp.name} (${emp.employee_id})"),
+
+                  ...dayCells,
+
+                  cell("$p"),
+                  cell("$l"),
+                  cell("$ab"),
+                  cell("$off"),
+                  cell("$nh"),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  final bytes = await pdf.save();
+
+  await Printing.sharePdf(
+    bytes: bytes,
+    filename:
+        "Attendance_Shift-${selectedShift}_${month.toString().padLeft(2, '0')}_$year.pdf",
+  );
+}
 
   @override
   Widget build(BuildContext context) {
