@@ -148,7 +148,7 @@ class _MainScreenState extends State<MainScreen> {
           setState(() {});
         },
       ),
-      ReportsScreen(employees: employees),
+      ReportsScreen(),
       ProfileScreen(profile: profile ?? {}),
     ];
 

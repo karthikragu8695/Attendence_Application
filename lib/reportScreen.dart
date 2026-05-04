@@ -1,141 +1,73 @@
 import 'package:flutter/material.dart';
-import 'package:attendance_plot/main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class ReportsScreen extends StatelessWidget {
-  final List<Employee> employees;
+final supabase = Supabase.instance.client;
 
-  const ReportsScreen({super.key, required this.employees});
-
-  /// 🔥 COUNT FUNCTION (TODAY STATUS ONLY)
-  int countStatus(String shift, String status) {
-    return employees
-        .where((e) => e.shift == shift && e.status == status)
-        .length;
-  }
+class ReportsScreen extends StatefulWidget {
+  const ReportsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final shifts = ["A", "B", "C"];
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+class _ReportsScreenState extends State<ReportsScreen> {
+  bool loading = true;
+  List<dynamic> attendanceData = [];
 
-      /// ================= APP BAR =================
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          "Shift Reports",
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
+  late String today;
 
-      /// ================= BODY =================
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            /// 🔹 SHIFT CARDS
-            Expanded(
-              child: ListView.builder(
-                itemCount: shifts.length,
-                itemBuilder: (context, index) {
-                  final shift = shifts[index];
+  @override
+  void initState() {
+    super.initState();
 
-                  /// 🔥 TODAY COUNTS
-                  final p = countStatus(shift, "P");
-                  final l = countStatus(shift, "L");
-                  final ab = countStatus(shift, "AB");
-                  final off = countStatus(shift, "OFF");
-                  final nh = countStatus(shift, "NH");
-
-                  final total = p + l + ab + off + nh;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        /// 🔹 SHIFT TITLE
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "Shift $shift",
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              "Total: $total",
-                              style: const TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        /// 🔹 STATUS ROW
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildStatus("P", p, Colors.green),
-                            _buildStatus("L", l, Colors.orange),
-                            _buildStatus("AB", ab, Colors.red),
-                            _buildStatus("OFF", off, Colors.amber),
-                            _buildStatus("NH", nh, Colors.blue),
-                          ],
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        /// 🔹 PROGRESS BAR (PRESENT RATE)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: total == 0 ? 0 : p / total,
-                            minHeight: 6,
-                            backgroundColor: Colors.grey.shade200,
-                            valueColor:
-                                const AlwaysStoppedAnimation(Colors.green),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    today = DateTime.now().toIso8601String().split('T')[0];
+    fetchAttendance();
   }
 
-  /// 🔹 STATUS WIDGET
-  Widget _buildStatus(String title, int count, Color color) {
+  // =========================
+  // FETCH ONLY TODAY DATA
+  // =========================
+  Future<void> fetchAttendance() async {
+    try {
+      final data = await supabase
+          .from('attendance')
+          .select('''
+            id,
+            employee_id,
+            date,
+            status,
+            employees!inner(shift)
+          ''')
+          .eq('date', today); // 🔥 IMPORTANT FIX
+
+      setState(() {
+        attendanceData = data ?? [];
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        attendanceData = [];
+        loading = false;
+      });
+    }
+  }
+
+  // =========================
+  // COUNT BY SHIFT + STATUS
+  // =========================
+  int countBy(String shift, String status) {
+    return attendanceData.where((e) {
+      final emp = e['employees'];
+      if (emp == null) return false;
+
+      return emp['shift'] == shift && e['status'] == status;
+    }).length;
+  }
+
+  // =========================
+  // STATUS WIDGET
+  // =========================
+  Widget statusBox(String title, int count, Color color) {
     return Column(
       children: [
         Text(
@@ -146,11 +78,105 @@ class ReportsScreen extends StatelessWidget {
             color: color,
           ),
         ),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 12),
-        ),
+        Text(title, style: const TextStyle(fontSize: 12)),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shifts = ["A", "B", "C"];
+
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+
+      appBar: AppBar(
+        title: const Text("Shift Reports (Today)"),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: shifts.length,
+        itemBuilder: (context, index) {
+          final shift = shifts[index];
+
+          final p = countBy(shift, "P");
+          final l = countBy(shift, "L");
+          final ab = countBy(shift, "AB");
+          final off = countBy(shift, "OFF");
+          final nh = countBy(shift, "NH");
+
+          final total = p + l + ab + off + nh;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                )
+              ],
+            ),
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // =========================
+                // SHIFT HEADER
+                // =========================
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Shift $shift",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "Total: $total",
+                      style: const TextStyle(color: Colors.blue),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // =========================
+                // STATUS ROW
+                // =========================
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    statusBox("P", p, Colors.green),
+                    statusBox("L", l, Colors.orange),
+                    statusBox("AB", ab, Colors.red),
+                    statusBox("OFF", off, Colors.amber),
+                    statusBox("NH", nh, Colors.blue),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

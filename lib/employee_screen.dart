@@ -201,7 +201,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                     const Text("Shift"),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: selectedShift,
+                      initialValue: selectedShift,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey.shade100,
@@ -229,7 +229,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                     const Text("Role"),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: selectedRole,
+                      initialValue: selectedRole,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey.shade100,
@@ -239,7 +239,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                         ),
                       ),
                       items:
-                          [
+                          {
                                 "worker",
                                 "Incharge",
                                 "Assistent Incharge",
@@ -253,8 +253,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                                 "Gaadi",
                                 "System Entry Operator",
                                 "Other",
-                              ]
-                              .toSet() // 🔥 FIX duplicate dropdown error
+                              } // 🔥 FIX duplicate dropdown error
                               .map(
                                 (e) =>
                                     DropdownMenuItem(value: e, child: Text(e)),
@@ -415,7 +414,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                     const Text("Shift"),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: selectedShift,
+                      initialValue: selectedShift,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey.shade100,
@@ -443,7 +442,7 @@ class _EmployeesScreenState extends State<EmployeesScreen>
                     const Text("Role"),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: selectedRole,
+                      initialValue: selectedRole,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.grey.shade100,

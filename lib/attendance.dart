@@ -1,8 +1,6 @@
-import 'dart:io';
-
+import 'package:attendance_plot/MaintenanceScreen.dart';
 import 'package:attendance_plot/model/date.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -10,9 +8,14 @@ import 'package:printing/printing.dart';
 import 'main.dart';
 
 class AttendanceScreen extends StatefulWidget {
+    final Function(int)? onNavigate; //
   final List<Employee> employees;
 
-  const AttendanceScreen({super.key, required this.employees});
+    const AttendanceScreen({
+    super.key,
+    required this.employees,
+    this.onNavigate,
+  });
 
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
@@ -41,10 +44,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   /// 🔥 FETCH DATA
   Future<void> fetchAttendance() async {
-    final data = await supabase
-        .from('attendance')
-        .select()
-        .inFilter('date', [today, yesterday]);
+    final data = await supabase.from('attendance').select().inFilter('date', [
+      today,
+      yesterday,
+    ]);
 
     todayMap.clear();
     yesterdayMap.clear();
@@ -87,183 +90,179 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   /// 🔥 PDF (UNCHANGED)
   Future<void> generateShiftPdf() async {
-  final pdf = pw.Document();
-  final filtered = getFilteredEmployees();
+    final pdf = pw.Document();
+    final filtered = getFilteredEmployees();
 
-  /// 🔥 SORT ASCENDING
-  filtered.sort((a, b) {
-    int getNumber(String id) {
-      return int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    /// 🔥 SORT ASCENDING
+    filtered.sort((a, b) {
+      int getNumber(String id) {
+        return int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      }
+
+      return getNumber(
+        a.employee_id ?? "",
+      ).compareTo(getNumber(b.employee_id ?? ""));
+    });
+
+    final now = DateTime.now();
+    final year = now.year;
+    final month = now.month;
+    final daysInMonth = DateUtils.getDaysInMonth(year, month);
+
+    final data = await supabase
+        .from('attendance')
+        .select()
+        .gte('date', DateTime(year, month, 1).toIso8601String())
+        .lte(
+          'date',
+          DateTime(year, month, daysInMonth, 23, 59, 59).toIso8601String(),
+        );
+
+    /// 🔥 MAP
+    Map<String, Map<int, String>> monthlyMap = {};
+    for (var row in data) {
+      final empId = row['employee_id'].toString();
+      final date = DateTime.parse(row['date']);
+      final day = date.day;
+
+      monthlyMap.putIfAbsent(empId, () => {});
+      monthlyMap[empId]![day] = row['status'];
     }
 
-    return getNumber(a.employee_id ?? "")
-        .compareTo(getNumber(b.employee_id ?? ""));
-  });
-
-  final now = DateTime.now();
-  final year = now.year;
-  final month = now.month;
-  final daysInMonth = DateUtils.getDaysInMonth(year, month);
-
-  final data = await supabase
-      .from('attendance')
-      .select()
-      .gte('date', DateTime(year, month, 1).toIso8601String())
-      .lte(
-        'date',
-        DateTime(year, month, daysInMonth, 23, 59, 59)
-            .toIso8601String(),
+    pw.Widget cell(String text) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(3),
+        alignment: pw.Alignment.center,
+        child: pw.Text(text, style: pw.TextStyle(fontSize: 7)),
       );
+    }
 
-  /// 🔥 MAP
-  Map<String, Map<int, String>> monthlyMap = {};
-  for (var row in data) {
-    final empId = row['employee_id'].toString();
-    final date = DateTime.parse(row['date']);
-    final day = date.day;
+    pdf.addPage(
+      pw.MultiPage(
+        orientation: pw.PageOrientation.landscape,
+        margin: const pw.EdgeInsets.all(6),
+        build: (context) => [
+          pw.SizedBox(height: 20),
 
-    monthlyMap.putIfAbsent(empId, () => {});
-    monthlyMap[empId]![day] = row['status'];
-  }
-
-  pw.Widget cell(String text) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(3),
-      alignment: pw.Alignment.center,
-      child: pw.Text(text, style: pw.TextStyle(fontSize: 7)),
-    );
-  }
-
-  pdf.addPage(
-    pw.MultiPage(
-      orientation: pw.PageOrientation.landscape,
-      margin: const pw.EdgeInsets.all(6),
-      build: (context) => [
-        pw.SizedBox(height: 20),
-
-        /// 🔥 TITLE
-        pw.Center(
-          child: pw.Text(
-            "SHIFT $selectedShift - ATTENDANCE ($month/$year)",
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
+          /// 🔥 TITLE
+          pw.Center(
+            child: pw.Text(
+              "SHIFT $selectedShift - ATTENDANCE ($month/$year)",
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
           ),
-        ),
 
-        pw.SizedBox(height: 6),
+          pw.SizedBox(height: 6),
 
-        pw.Table(
-          border: pw.TableBorder.all(width: 0.3),
-          children: [
-            /// 🔥 HEADER ROW
-            pw.TableRow(
-              children: [
-                cell("NO"),   // 🔥 NEW COLUMN
-                cell("NAME"),
-                ...List.generate(daysInMonth, (i) {
-                  final d = DateTime(year, month, i + 1);
-                  return pw.Container(
-                    color: d.weekday == 7
-                        ? PdfColors.red200
-                        : PdfColors.grey300,
-                    child: cell(getDayName(d.weekday)),
-                  );
-                }),
-                cell("P"),
-                cell("L"),
-                cell("AB"),
-                cell("OFF"),
-                cell("NH"),
-              ],
-            ),
-
-            /// 🔥 DATE ROW
-            pw.TableRow(
-              children: [
-                cell(""),
-                cell(""),
-                ...List.generate(daysInMonth, (i) {
-                  final d = DateTime(year, month, i + 1);
-                  return pw.Container(
-                    color: d.weekday == 7
-                        ? PdfColors.red100
-                        : PdfColors.white,
-                    child: cell("${i + 1}"),
-                  );
-                }),
-                cell(""),
-                cell(""),
-                cell(""),
-                cell(""),
-                cell(""),
-              ],
-            ),
-
-            /// 🔥 DATA ROWS
-            ...filtered.asMap().entries.map((entry) {
-              final index = entry.key;
-              final emp = entry.value;
-
-              int p = 0, l = 0, ab = 0, off = 0, nh = 0;
-
-              List<pw.Widget> dayCells = [];
-
-              for (int d = 1; d <= daysInMonth; d++) {
-                String status =
-                    monthlyMap[emp.id.toString()]?[d] ?? "-";
-
-                if (status == "P") p++;
-                if (status == "L") l++;
-                if (status == "AB") ab++;
-                if (status == "OFF") off++;
-                if (status == "NH") nh++;
-
-                dayCells.add(
-                  pw.Container(
-                    alignment: pw.Alignment.center,
-                    color: getPdfColor(status),
-                    child: pw.Text(
-                      status,
-                      style: const pw.TextStyle(fontSize: 6),
-                    ),
-                  ),
-                );
-              }
-
-              return pw.TableRow(
+          pw.Table(
+            border: pw.TableBorder.all(width: 0.3),
+            children: [
+              /// 🔥 HEADER ROW
+              pw.TableRow(
                 children: [
-                  /// 🔥 SERIAL NUMBER
-                  cell("${index + 1}"),
-
-                  /// 🔥 NAME + ID
-                  cell("${emp.name} (${emp.employee_id})"),
-
-                  ...dayCells,
-
-                  cell("$p"),
-                  cell("$l"),
-                  cell("$ab"),
-                  cell("$off"),
-                  cell("$nh"),
+                  cell("NO"), // 🔥 NEW COLUMN
+                  cell("NAME"),
+                  ...List.generate(daysInMonth, (i) {
+                    final d = DateTime(year, month, i + 1);
+                    return pw.Container(
+                      color: d.weekday == 7
+                          ? PdfColors.red200
+                          : PdfColors.grey300,
+                      child: cell(getDayName(d.weekday)),
+                    );
+                  }),
+                  cell("P"),
+                  cell("L"),
+                  cell("AB"),
+                  cell("OFF"),
+                  cell("NH"),
                 ],
-              );
-            }),
-          ],
-        ),
-      ],
-    ),
-  );
+              ),
 
-  final bytes = await pdf.save();
+              /// 🔥 DATE ROW
+              pw.TableRow(
+                children: [
+                  cell(""),
+                  cell(""),
+                  ...List.generate(daysInMonth, (i) {
+                    final d = DateTime(year, month, i + 1);
+                    return pw.Container(
+                      color: d.weekday == 7
+                          ? PdfColors.red100
+                          : PdfColors.white,
+                      child: cell("${i + 1}"),
+                    );
+                  }),
+                  cell(""),
+                  cell(""),
+                  cell(""),
+                  cell(""),
+                  cell(""),
+                ],
+              ),
 
-  await Printing.sharePdf(
-    bytes: bytes,
-    filename:
-        "Attendance_Shift-${selectedShift}_${month.toString().padLeft(2, '0')}_$year.pdf",
-  );
-}
+              /// 🔥 DATA ROWS
+              ...filtered.asMap().entries.map((entry) {
+                final index = entry.key;
+                final emp = entry.value;
+
+                int p = 0, l = 0, ab = 0, off = 0, nh = 0;
+
+                List<pw.Widget> dayCells = [];
+
+                for (int d = 1; d <= daysInMonth; d++) {
+                  String status = monthlyMap[emp.id.toString()]?[d] ?? "-";
+
+                  if (status == "P") p++;
+                  if (status == "L") l++;
+                  if (status == "AB") ab++;
+                  if (status == "OFF") off++;
+                  if (status == "NH") nh++;
+
+                  dayCells.add(
+                    pw.Container(
+                      alignment: pw.Alignment.center,
+                      color: getPdfColor(status),
+                      child: pw.Text(
+                        status,
+                        style: const pw.TextStyle(fontSize: 6),
+                      ),
+                    ),
+                  );
+                }
+
+                return pw.TableRow(
+                  children: [
+                    /// 🔥 SERIAL NUMBER
+                    cell("${index + 1}"),
+
+                    /// 🔥 NAME + ID
+                    cell("${emp.name} (${emp.employee_id})"),
+
+                    ...dayCells,
+
+                    cell("$p"),
+                    cell("$l"),
+                    cell("$ab"),
+                    cell("$off"),
+                    cell("$nh"),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final bytes = await pdf.save();
+
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename:
+          "Attendance_Shift-${selectedShift}_${month.toString().padLeft(2, '0')}_$year.pdf",
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -271,11 +270,60 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                "Menu",
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ),
+
+           // / 🔥 ATTENDANCE
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text("Attendance"),
+              onTap: () {
+                Navigator.pop(context); // close drawer
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        MainScreen(),
+                  ),
+                );
+              },
+            ),
+
+            /// 🔥 MAINTENANCE (Second Screen)
+            ListTile(
+              leading: const Icon(Icons.build),
+              title: const Text("Maintenance"),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        MaintenanceScreen(employees: widget.employees),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
 
       appBar: AppBar(
-        title: const Text("Attendance",
-            style: TextStyle(color: Colors.black)),
+        title: const Text("Attendance", style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
+
         elevation: 0,
         centerTitle: true,
         actions: [
@@ -307,19 +355,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 8),
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.blue
-                          : Colors.transparent,
+                      color: isSelected ? Colors.blue : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       "Shift $shift",
                       style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : Colors.black,
+                        color: isSelected ? Colors.white : Colors.black,
                       ),
                     ),
                   ),
@@ -338,11 +384,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               itemBuilder: (context, index) {
                 final emp = employees[index];
 
-                final todayStatus =
-                    todayMap[emp.id.toString()] ?? "-";
+                final todayStatus = todayMap[emp.id.toString()] ?? "-";
 
-                final yesterdayStatus =
-                    yesterdayMap[emp.id.toString()] ?? "-";
+                final yesterdayStatus = yesterdayMap[emp.id.toString()] ?? "-";
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -358,19 +402,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Text(emp.name,
-                                    style: const TextStyle(
-                                        fontWeight:
-                                            FontWeight.bold)),
+                                Text(
+                                  emp.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Text("(ID: ${emp.employee_id})",
-                                    style: const TextStyle(
-                                        fontSize: 12)),
+                                Text(
+                                  "(ID: ${emp.employee_id})",
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                             Text("Shift ${emp.shift}"),
@@ -378,18 +424,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             Text(
                               "Yesterday: $yesterdayStatus",
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight:
-                                      FontWeight.w500,
-                                  color: Colors.grey),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey,
+                              ),
                             ),
                           ],
                         ),
                       ),
 
                       DropdownButton<String>(
-                        value:
-                            todayStatus == "-" ? null : todayStatus,
+                        value: todayStatus == "-" ? null : todayStatus,
                         hint: const Text("Select"),
                         underline: const SizedBox(),
                         items: ["P", "L", "AB", "OFF", "NH"]
@@ -399,10 +444,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 child: Text(
                                   s,
                                   style: TextStyle(
-                                    color:
-                                        getStatusColor(s),
-                                    fontWeight:
-                                        FontWeight.bold,
+                                    color: getStatusColor(s),
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -411,15 +454,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         onChanged: (value) async {
                           if (value == null) return;
 
-                          await supabase
-                              .from('attendance')
-                              .upsert({
+                          await supabase.from('attendance').upsert({
                             'employee_id': emp.id,
                             'date': today,
                             'status': value,
                           }, onConflict: 'employee_id,date');
 
-                          await fetchAttendance(); // 🔥 refresh
+                          await fetchAttendance();
+
+                          if (mounted) setState(() {});
                         },
                       ),
                     ],
