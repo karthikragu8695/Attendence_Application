@@ -104,7 +104,7 @@ class _IssueDetailScreenState extends State<IssueDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: issueType,
+                  initialValue: issueType,
                   items: const [
                     DropdownMenuItem(
                         value: "Electrical", child: Text("Electrical")),

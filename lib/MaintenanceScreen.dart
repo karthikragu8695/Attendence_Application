@@ -1,4 +1,5 @@
 import 'package:attendance_plot/MyIssuesScreen.dart';
+import 'package:attendance_plot/kaizen/home.dart';
 import 'package:attendance_plot/main.dart';
 import 'package:attendance_plot/maindence_dashboard.dart';
 import 'package:attendance_plot/maintenceReport.dart';
@@ -83,6 +84,23 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                 Navigator.pop(context);
               },
             ),
+              ListTile(
+              leading: const Icon(Icons.trending_up),
+              title: const Text("Kaizen"),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        DashboardScreen(employes: employees), // ✅ correct
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+
 
             // ListTile(
             //   leading: const Icon(Icons.report),

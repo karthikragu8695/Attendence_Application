@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// ✅ PDF IMPORTS
+
 final supabase = Supabase.instance.client;
 
 class MaintenanceDashboard extends StatefulWidget {
   const MaintenanceDashboard({super.key});
 
   @override
-  State<MaintenanceDashboard> createState() => _MaintenanceDashboardState();
+  State<MaintenanceDashboard> createState() =>
+      _MaintenanceDashboardState();
 }
 
 class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
@@ -21,6 +24,9 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
 
   int totalDowntimeMinutes = 0;
 
+  // ✅ NEW
+  Map<String, int> downtimeByMachine = {};
+
   bool loading = true;
 
   @override
@@ -29,9 +35,6 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
     fetchData();
   }
 
-  // =========================
-  // FETCH DATA
-  // =========================
   // =========================
   // FETCH DATA
   // =========================
@@ -45,48 +48,58 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
 
       total = issues.length;
 
-      // 🔥 NORMALIZE STATUS
+      // STATUS
       inProgress = issues.where((e) {
-        final status = (e['status'] ?? '').toString().toLowerCase().replaceAll(
-          ' ',
-          '',
-        );
-
+        final status = (e['status'] ?? '')
+            .toString()
+            .toLowerCase()
+            .replaceAll(' ', '');
         return status == 'inprogress';
       }).length;
 
       completed = issues.where((e) {
-        final status = (e['status'] ?? '').toString().toLowerCase().replaceAll(
-          ' ',
-          '',
-        );
-
+        final status = (e['status'] ?? '')
+            .toString()
+            .toLowerCase()
+            .replaceAll(' ', '');
         return status == 'completed';
       }).length;
 
       highPriority = issues.where((e) {
-        return (e['priority'] ?? '').toString().toLowerCase() == 'high';
+        return (e['priority'] ?? '')
+                .toString()
+                .toLowerCase() ==
+            'high';
       }).length;
 
       // =========================
       // DOWNTIME CALCULATION
       // =========================
       totalDowntimeMinutes = 0;
+      downtimeByMachine.clear();
 
       for (final i in issues) {
         try {
           final start = i['start_time'];
           final end = i['end_time'];
+          final machine =
+              (i['machine_name'] ?? 'Unknown').toString();
 
           if (start == null || end == null) continue;
 
-          final s = DateTime.tryParse(start);
-          final e = DateTime.tryParse(end);
+          final s = DateTime.tryParse(start.toString());
+          final e = DateTime.tryParse(end.toString());
 
           if (s == null || e == null) continue;
 
           if (e.isAfter(s)) {
-            totalDowntimeMinutes += e.difference(s).inMinutes;
+            final minutes = e.difference(s).inMinutes;
+
+            totalDowntimeMinutes += minutes;
+
+            downtimeByMachine[machine] =
+                (downtimeByMachine[machine] ?? 0) +
+                    minutes;
           }
         } catch (_) {}
       }
@@ -101,6 +114,11 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
   }
 
   // =========================
+  // PDF FUNCTION
+  // =========================
+
+
+  // =========================
   // UI
   // =========================
   @override
@@ -108,95 +126,101 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
 
-    //   appBar: AppBar(
-    //  //   title: const Text("Maintenance Dashboard"),
-    //     centerTitle: true,
-    //     backgroundColor: const Color(0xFFF4F6FA),
-
-    //     foregroundColor: Colors.black,
-    //     elevation: 0,
-    //   ),
-
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Overview",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // =========================
-                  // STATS GRID
-                  // =========================
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.1,
+                  // 🔥 HEADER + PDF BUTTON
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceBetween,
                     children: [
-                      _card("Total Issues", "$total", Icons.build, Colors.blue),
-                      _card(
-                        "In Progress",
-                        "$inProgress",
-                        Icons.timelapse,
-                        Colors.orange,
+                      const Text(
+                        "Overview",
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight:
+                                FontWeight.bold),
                       ),
-                      _card(
-                        "Completed",
-                        "$completed",
-                        Icons.check_circle,
-                        Colors.green,
-                      ),
-                      _card(
-                        "High Priority",
-                        "$highPriority",
-                        Icons.warning,
-                        Colors.red,
-                      ),
+                      
                     ],
                   ),
 
                   const SizedBox(height: 16),
 
-                  // =========================
-                  // MACHINES
-                  // =========================
+                  // STATS GRID
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics:
+                        const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.1,
+                    children: [
+                      _card("Total Issues", "$total",
+                          Icons.build, Colors.blue),
+                      _card(
+                          "In Progress",
+                          "$inProgress",
+                          Icons.timelapse,
+                          Colors.orange),
+                      _card(
+                          "Completed",
+                          "$completed",
+                          Icons.check_circle,
+                          Colors.green),
+                      _card(
+                          "High Priority",
+                          "$highPriority",
+                          Icons.warning,
+                          Colors.red),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
                   const Text(
                     "Today Overview",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            FontWeight.bold),
                   ),
 
                   const SizedBox(height: 10),
 
-                  // =========================
-                  // DOWNTIME
-                  // =========================
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding:
+                        const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius:
+                          BorderRadius.circular(16),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment
+                              .spaceBetween,
                       children: [
                         const Text(
                           "Total Downtime",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontWeight:
+                                  FontWeight.bold),
                         ),
                         Text(
                           "${totalDowntimeMinutes ~/ 60}h ${totalDowntimeMinutes % 60}m",
                           style: const TextStyle(
                             color: Colors.red,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                       ],
@@ -207,29 +231,31 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
 
                   ...machines.map((m) {
                     final count = issues
-                        .where((i) => i['machine_name'] == m['name'])
+                        .where((i) =>
+                            i['machine_name'] ==
+                            m['name'])
                         .length;
 
-                    return _tile(m['machine_name'] ?? '', count);
+                    return _tile(
+                        m['name'] ?? '', count);
                   }),
 
-                  // =========================
-                  // ISSUES
-                  // =========================
                   const Text(
                     "Issue Report",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            FontWeight.bold),
                   ),
 
                   const SizedBox(height: 10),
 
-                  ...issues
-                      .take(5)
-                      .map(
+                  ...issues.take(5).map(
                         (i) => _issueTile(
                           i['machine_name'] ?? '',
                           i['issue_type'] ?? '',
-                          (i['status'] ?? '').toString(),
+                          (i['status'] ?? '')
+                              .toString(),
                         ),
                       ),
                 ],
@@ -239,44 +265,53 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
   }
 
   // =========================
-  // CARD
+  // WIDGETS
   // =========================
-  Widget _card(String title, String value, IconData icon, Color color) {
+
+  Widget _card(String title, String value,
+      IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius:
+            BorderRadius.circular(16),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color),
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight:
+                    FontWeight.bold),
           ),
-          Text(title, style: const TextStyle(color: Colors.grey)),
+          Text(title,
+              style: const TextStyle(
+                  color: Colors.grey)),
         ],
       ),
     );
   }
 
-  // =========================
-  // MACHINE TILE
-  // =========================
   Widget _tile(String name, int count) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin:
+          const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          const Icon(Icons.precision_manufacturing),
+          const Icon(
+              Icons.precision_manufacturing),
           const SizedBox(width: 10),
           Expanded(child: Text(name)),
           Text(count.toString()),
@@ -285,10 +320,10 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
     );
   }
 
-  // =========================
-  // ISSUE TILE
-  // =========================
-  Widget _issueTile(String machine, String type, String status) {
+  Widget _issueTile(
+      String machine,
+      String type,
+      String status) {
     final s = status.toLowerCase().trim();
 
     Color color;
@@ -301,20 +336,27 @@ class _MaintenanceDashboardState extends State<MaintenanceDashboard> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin:
+          const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           const Icon(Icons.report),
           const SizedBox(width: 10),
-          Expanded(child: Text("$machine - $type")),
+          Expanded(
+              child:
+                  Text("$machine - $type")),
           Text(
             s,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: color,
+                fontWeight:
+                    FontWeight.bold),
           ),
         ],
       ),

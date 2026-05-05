@@ -1,4 +1,5 @@
 import 'package:attendance_plot/MaintenanceScreen.dart';
+import 'package:attendance_plot/kaizen/home.dart';
 import 'package:attendance_plot/model/date.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -8,14 +9,10 @@ import 'package:printing/printing.dart';
 import 'main.dart';
 
 class AttendanceScreen extends StatefulWidget {
-    final Function(int)? onNavigate; //
+  final Function(int)? onNavigate; //
   final List<Employee> employees;
 
-    const AttendanceScreen({
-    super.key,
-    required this.employees,
-    this.onNavigate,
-  });
+  const AttendanceScreen({super.key, required this.employees, this.onNavigate});
 
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
@@ -282,7 +279,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             ),
 
-           // / 🔥 ATTENDANCE
+            // / 🔥 ATTENDANCE
             ListTile(
               leading: const Icon(Icons.people),
               title: const Text("Attendance"),
@@ -291,10 +288,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        MainScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => MainScreen()),
                 );
               },
             ),
@@ -311,6 +305,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   MaterialPageRoute(
                     builder: (_) =>
                         MaintenanceScreen(employees: widget.employees),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.trending_up),
+              title: const Text("Kaizen"),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        DashboardScreen(employes: employees), // ✅ correct
                   ),
                   (route) => false,
                 );

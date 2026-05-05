@@ -22,6 +22,132 @@ class _MyIssuesScreenState extends State<MyIssuesScreen> {
     fetchIssues();
   }
 
+//   Future<void> generateBreakdownPDF() async {
+//   final pdf = pw.Document();
+
+//   int totalMinutes = 0;
+//   Map<String, int> machineMap = {};
+
+//   for (final i in issues) {
+//     try {
+//       final start = i['start_time'];
+//       final end = i['end_time'];
+
+//       if (start == null) continue;
+
+//       final s = DateTime.tryParse(start.toString());
+//       if (s == null) continue;
+
+//       // ✅ IMPORTANT FIX
+//       final e = end != null
+//           ? DateTime.tryParse(end.toString())
+//           : DateTime.now(); // running issue
+
+//       if (e == null) continue;
+
+//       if (e.isAfter(s)) {
+//         final minutes = e.difference(s).inMinutes;
+
+//         // ❌ avoid zero/negative values
+//         if (minutes <= 0) continue;
+
+//         totalMinutes += minutes;
+
+//         final machine =
+//             (i['machine_name'] ?? 'Unknown').toString();
+
+//         machineMap[machine] =
+//             (machineMap[machine] ?? 0) + minutes;
+//       }
+//     } catch (err) {
+//       debugPrint("ERROR IN LOOP: $err");
+//     }
+//   }
+
+//   // 🔥 DEBUG (CHECK THIS IN CONSOLE)
+//   debugPrint("TOTAL ISSUES: ${issues.length}");
+//   debugPrint("TOTAL MINUTES: $totalMinutes");
+//   debugPrint("MAP DATA: $machineMap");
+
+//   pdf.addPage(
+//     pw.Page(
+//       build: (context) {
+//         return pw.Column(
+//           crossAxisAlignment: pw.CrossAxisAlignment.start,
+//           children: [
+//             pw.Text(
+//               "Breakdown Report",
+//               style: pw.TextStyle(
+//                 fontSize: 22,
+//                 fontWeight: pw.FontWeight.bold,
+//               ),
+//             ),
+
+//             pw.SizedBox(height: 10),
+
+//             pw.Text(
+//               "Total Downtime: ${totalMinutes ~/ 60}h ${totalMinutes % 60}m",
+//             ),
+
+//             pw.SizedBox(height: 16),
+
+//             // ✅ EMPTY FIX MESSAGE
+//             if (machineMap.isEmpty)
+//               pw.Text("⚠ No valid breakdown data found"),
+
+//             if (machineMap.isNotEmpty)
+//               pw.Table(
+//                 border: pw.TableBorder.all(),
+//                 children: [
+//                   pw.TableRow(
+//                     decoration: const pw.BoxDecoration(
+//                       color: PdfColors.grey300,
+//                     ),
+//                     children: [
+//                       pw.Padding(
+//                         padding: const pw.EdgeInsets.all(8),
+//                         child: pw.Text("Machine"),
+//                       ),
+//                       pw.Padding(
+//                         padding: const pw.EdgeInsets.all(8),
+//                         child: pw.Text("Downtime"),
+//                       ),
+//                     ],
+//                   ),
+
+//                   ...machineMap.entries.map((e) {
+//                     final h = e.value ~/ 60;
+//                     final m = e.value % 60;
+
+//                     return pw.TableRow(
+//                       children: [
+//                         pw.Padding(
+//                           padding: const pw.EdgeInsets.all(8),
+//                           child: pw.Text(e.key),
+//                         ),
+//                         pw.Padding(
+//                           padding: const pw.EdgeInsets.all(8),
+//                           child: pw.Text("${h}h ${m}m"),
+//                         ),
+//                       ],
+//                     );
+//                   }).toList(),
+//                 ],
+//               ),
+//           ],
+//         );
+//       },
+//     ),
+//   );
+
+//   final bytes = await pdf.save();
+
+//   await Printing.sharePdf(
+//     bytes: bytes,
+//     filename: "Breakdown_Report.pdf",
+//   );
+// }
+
   /// ================= FETCH =================
   Future<void> fetchIssues() async {
     try {
@@ -141,13 +267,25 @@ class _MyIssuesScreenState extends State<MyIssuesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
+      
 
       appBar: AppBar(
         title: const Text("My Issues"),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        // actions: [
+        //   IconButton(
+        //                   onPressed:
+        //                       generateBreakdownPDF,
+        //                   icon: const Icon(
+        //                       Icons.picture_as_pdf,
+        //                       color: Colors.red),
+        //                 ),
+        // ]
+        
       ),
+      
 
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
